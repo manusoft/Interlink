@@ -9,7 +9,7 @@
 		<RootNamespace>Interlink.Analyzers</RootNamespace>
 		<AssemblyName>Interlink.Analyzers</AssemblyName>
 		<PackageId>Interlink.Analyzers</PackageId>
-		<Version>1.5.3</Version>
+		<Version>1.5.4</Version>
 		<Description>Roslyn analyzer that detects requests without corresponding handlers for the Interlink mediator library.</Description>
 		<Copyright>Copyright © 2025-2026 ManuHub</Copyright>
 		<Authors>Manojbabu</Authors>
@@ -33,8 +33,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" PrivateAssets="all" />
-		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="5.6.0" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.*" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="5.*" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>
