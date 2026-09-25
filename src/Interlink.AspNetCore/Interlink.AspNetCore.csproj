@@ -8,7 +8,7 @@
 		<RootNamespace>Interlink.AspNetCore</RootNamespace>
 		<AssemblyName>Interlink.AspNetCore</AssemblyName>
 		<PackageId>Interlink.AspNetCore</PackageId>
-		<Version>1.5.2</Version>
+		<Version>1.6.0</Version>
 		<Description>ASP.NET Core integration for the Interlink mediator library (filters, exception handling, helpers).</Description>
 		<Copyright>Copyright © 2025-2026 ManuHub</Copyright>
 		<Authors>Manojbabu</Authors>

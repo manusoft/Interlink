@@ -7,6 +7,10 @@ public class InterlinkOptions
 {
     internal List<(Type Type, int? Order)> OpenBehaviors { get; } = new();
 
+    internal List<(Type Type, int? Order)> OpenNotificationBehaviors { get; } = new();
+
+    internal List<(Type Type, int? Order)> OpenStreamBehaviors { get; } = new();
+
     /// <summary>
     /// Gets or sets an optional custom factory used to resolve handlers and pipeline components.
     /// When set, this factory is preferred over the default <see cref="IServiceProvider"/>.
@@ -14,20 +18,21 @@ public class InterlinkOptions
     public Func<Type, object?>? ServiceFactory { get; set; }
 
     /// <summary>
-    /// Adds an open-generic pipeline behavior type to the configuration.
+    /// Gets or sets how notification handlers are invoked when publishing.
+    /// Default is <see cref="PublishStrategy.Sequential"/>.
     /// </summary>
-    /// <param name="openGenericBehaviorType">
-    /// An open generic type that implements <see cref="IPipelineBehavior{TRequest,TResponse}"/>
-    /// (for example <c>typeof(LoggingBehavior&lt;,&gt;)</c>).
-    /// </param>
-    /// <param name="order">
-    /// Optional explicit order. When provided, takes precedence over any
-    /// <see cref="PipelineOrderAttribute"/> on the type. Lower values run first.
-    /// </param>
-    /// <exception cref="ArgumentNullException"><paramref name="openGenericBehaviorType"/> is null.</exception>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="openGenericBehaviorType"/> is not an open generic type with exactly two type parameters.
-    /// </exception>
+    public PublishStrategy PublishStrategy { get; set; } = PublishStrategy.Sequential;
+
+    /// <summary>
+    /// Gets or sets an optional default timeout applied to all requests via
+    /// <see cref="TimeoutBehavior{TRequest,TResponse}"/>.
+    /// When null, no timeout behavior is registered.
+    /// </summary>
+    public TimeSpan? DefaultRequestTimeout { get; set; }
+
+    /// <summary>
+    /// Adds an open-generic request pipeline behavior type to the configuration.
+    /// </summary>
     public void AddBehavior(Type openGenericBehaviorType, int? order = null)
     {
         if (openGenericBehaviorType is null)
@@ -46,18 +51,69 @@ public class InterlinkOptions
     }
 
     /// <summary>
-    /// Adds an open-generic pipeline behavior type to the configuration using a generic type parameter.
+    /// Adds an open-generic request pipeline behavior using a generic type parameter.
     /// </summary>
-    /// <typeparam name="TBehavior">
-    /// The open generic behavior type that implements <see cref="IPipelineBehavior{TRequest,TResponse}"/>.
-    /// </typeparam>
-    /// <param name="order">
-    /// Optional explicit order. When provided, takes precedence over any
-    /// <see cref="PipelineOrderAttribute"/> on the type. Lower values run first.
-    /// </param>
     public void AddBehavior<TBehavior>(int? order = null)
         where TBehavior : class
     {
         AddBehavior(typeof(TBehavior), order);
+    }
+
+    /// <summary>
+    /// Adds an open-generic notification pipeline behavior type to the configuration.
+    /// </summary>
+    public void AddNotificationBehavior(Type openGenericBehaviorType, int? order = null)
+    {
+        if (openGenericBehaviorType is null)
+            throw new ArgumentNullException(nameof(openGenericBehaviorType));
+
+        if (!openGenericBehaviorType.IsGenericTypeDefinition ||
+            openGenericBehaviorType.GetGenericArguments().Length != 1)
+        {
+            throw new ArgumentException(
+                "Notification behavior must be an open generic type definition with exactly one generic parameter " +
+                "(for example typeof(MyNotificationBehavior<>)).",
+                nameof(openGenericBehaviorType));
+        }
+
+        OpenNotificationBehaviors.Add((openGenericBehaviorType, order));
+    }
+
+    /// <summary>
+    /// Adds an open-generic notification pipeline behavior using a generic type parameter.
+    /// </summary>
+    public void AddNotificationBehavior<TBehavior>(int? order = null)
+        where TBehavior : class
+    {
+        AddNotificationBehavior(typeof(TBehavior), order);
+    }
+
+    /// <summary>
+    /// Adds an open-generic stream pipeline behavior type to the configuration.
+    /// </summary>
+    public void AddStreamBehavior(Type openGenericBehaviorType, int? order = null)
+    {
+        if (openGenericBehaviorType is null)
+            throw new ArgumentNullException(nameof(openGenericBehaviorType));
+
+        if (!openGenericBehaviorType.IsGenericTypeDefinition ||
+            openGenericBehaviorType.GetGenericArguments().Length != 2)
+        {
+            throw new ArgumentException(
+                "Stream behavior must be an open generic type definition with exactly two generic parameters " +
+                "(for example typeof(MyStreamBehavior<,>)).",
+                nameof(openGenericBehaviorType));
+        }
+
+        OpenStreamBehaviors.Add((openGenericBehaviorType, order));
+    }
+
+    /// <summary>
+    /// Adds an open-generic stream pipeline behavior using a generic type parameter.
+    /// </summary>
+    public void AddStreamBehavior<TBehavior>(int? order = null)
+        where TBehavior : class
+    {
+        AddStreamBehavior(typeof(TBehavior), order);
     }
 }

@@ -21,14 +21,14 @@ public class PipelineBehaviorTests
 }
 
 public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : notnull 
+    where TRequest : notnull
 {
-    public static List<string> Logs = new(); 
+    public static List<string> Logs = new();
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
         Logs.Add($"[Before] {typeof(TRequest).Name}");
-        var response = await next(cancellationToken); 
+        var response = await next(cancellationToken);
         Logs.Add($"[After] {typeof(TRequest).Name}");
         return response;
     }

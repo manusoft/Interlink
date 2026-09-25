@@ -9,7 +9,7 @@ public class BasicTests
         services.AddInterlink(null, typeof(BasicTests).Assembly);
 
         // Resolve ISender from the service provider
-        var serviceProvider = services.BuildServiceProvider(); 
+        var serviceProvider = services.BuildServiceProvider();
         var sender = serviceProvider.GetRequiredService<ISender>();
 
         var response = await sender.Send(new EchoRequest("Hello"));

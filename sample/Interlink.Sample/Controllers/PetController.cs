@@ -1,5 +1,7 @@
-﻿using Interlink.Sample.Features;
+﻿using Interlink.Sample.Entities;
+using Interlink.Sample.Features;
 using Microsoft.AspNetCore.Mvc;
+using System.Runtime.CompilerServices;
 
 namespace Interlink.Sample.Controllers;
 
@@ -12,6 +14,15 @@ public class PetController(IMediator mediator) : ControllerBase
     {
         var pets = await mediator.Send(new GetAllPets.Query(), cancellationToken);
         return Ok(pets);
+    }
+
+    [HttpGet("stream")]
+    public async IAsyncEnumerable<Pet> GetAllPetsStream([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var pet in mediator.CreateStream(new ExportPetsStream.Stream(), cancellationToken))
+        {
+            yield return pet;
+        }
     }
 
     [HttpPost]

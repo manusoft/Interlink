@@ -16,4 +16,14 @@ public interface ISender
     /// Sends a void/command request that does not produce a response value.
     /// </summary>
     Task Send(IRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends a stream request and returns an asynchronous stream of responses.
+    /// </summary>
+    /// <typeparam name="TResponse">The type of each item in the response stream.</typeparam>
+    /// <param name="request">The stream request to send.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>An asynchronous stream of response items.</returns>
+    /// <exception cref="HandlerNotFoundException">Thrown when no stream handler is registered for the request type.</exception>
+    IAsyncEnumerable<TResponse> CreateStream<TResponse>(IStreamRequest<TResponse> request, CancellationToken cancellationToken = default);
 }

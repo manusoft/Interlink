@@ -14,6 +14,8 @@ internal static class TypeScanner
     /// <summary>
     /// Scans the given assembly for non-abstract, non-interface types that implement
     /// the specified open generic interface.
+    /// Open generic type definitions are skipped (register those via <c>AddBehavior</c> /
+    /// <c>AddStreamBehavior</c> / <c>AddNotificationBehavior</c>).
     /// </summary>
     public static IEnumerable<(Type ServiceType, Type ImplementationType)> Scan(Assembly assembly, Type openGenericType)
     {
@@ -40,7 +42,7 @@ internal static class TypeScanner
 
             foreach (var type in types)
             {
-                if (type is null || type.IsAbstract || type.IsInterface)
+                if (type is null || type.IsAbstract || type.IsInterface || type.IsGenericTypeDefinition)
                     continue;
 
                 foreach (var iface in type.GetInterfaces())
