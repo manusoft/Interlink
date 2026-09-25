@@ -19,5 +19,3 @@ public class CreatePet
         }
     }
 }
-
-public record GetSomthing() : IRequest;

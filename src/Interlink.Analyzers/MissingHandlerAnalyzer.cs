@@ -7,19 +7,23 @@ using System.Linq;
 namespace Interlink.Analyzers;
 
 /// <summary>
-/// Analyzer that reports a diagnostic when a type implementing <c>IRequest&lt;TResponse&gt;</c>
-/// has no corresponding <c>IRequestHandler&lt;TRequest, TResponse&gt;</c> in the compilation.
+/// Analyzer that reports diagnostics for Interlink request/handler consistency:
+/// <list type="bullet">
+/// <item><see cref="MissingHandlerId"/> — request with no handler</item>
+/// <item><see cref="DuplicateHandlerId"/> — more than one handler for the same request</item>
+/// </list>
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class MissingHandlerAnalyzer : DiagnosticAnalyzer
 {
-    /// <summary>
-    /// The diagnostic identifier for a missing request handler.
-    /// </summary>
-    public const string DiagnosticId = "ILINK001";
+    /// <summary>Diagnostic id for a missing request handler.</summary>
+    public const string MissingHandlerId = "ILINK001";
 
-    private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
-        id: DiagnosticId,
+    /// <summary>Diagnostic id for duplicate request handlers.</summary>
+    public const string DuplicateHandlerId = "ILINK002";
+
+    private static readonly DiagnosticDescriptor MissingHandlerRule = new DiagnosticDescriptor(
+        id: MissingHandlerId,
         title: "Missing request handler",
         messageFormat: "No handler found for request type '{0}'. Implement IRequestHandler<{0}, TResponse>.",
         category: "Interlink",
@@ -29,9 +33,20 @@ public sealed class MissingHandlerAnalyzer : DiagnosticAnalyzer
         helpLinkUri: null,
         customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
 
+    private static readonly DiagnosticDescriptor DuplicateHandlerRule = new DiagnosticDescriptor(
+        id: DuplicateHandlerId,
+        title: "Duplicate request handler",
+        messageFormat: "Multiple handlers found for request type '{0}'. Only one IRequestHandler should exist per request type.",
+        category: "Interlink",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Each IRequest<TResponse> should have exactly one IRequestHandler implementation in the compilation.",
+        helpLinkUri: null,
+        customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
+
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        ImmutableArray.Create(Rule);
+        ImmutableArray.Create(MissingHandlerRule, DuplicateHandlerRule);
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -48,16 +63,16 @@ public sealed class MissingHandlerAnalyzer : DiagnosticAnalyzer
         var requestInterface = compilation.GetTypeByMetadataName("Interlink.Contracts.IRequest`1");
         var handlerInterface = compilation.GetTypeByMetadataName("Interlink.IRequestHandler`2");
 
-        // Interlink not referenced in this compilation
         if (requestInterface is null || handlerInterface is null)
             return;
 
         var requestTypes = new List<INamedTypeSymbol>();
-        var handledRequestTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        // request type -> list of handler types that handle it
+        var handlersByRequest = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
 
         foreach (var type in GetAllTypes(compilation.GlobalNamespace))
         {
-            if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct))
+            if (type.TypeKind != TypeKind.Class && type.TypeKind != TypeKind.Struct)
                 continue;
 
             if (type.IsAbstract)
@@ -65,36 +80,62 @@ public sealed class MissingHandlerAnalyzer : DiagnosticAnalyzer
 
             foreach (var iface in type.AllInterfaces)
             {
-                // Collect request types: class/record implementing IRequest<T>
                 if (SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, requestInterface) &&
                     iface.TypeArguments.Length == 1)
                 {
                     requestTypes.Add(type);
                 }
 
-                // Collect handled request types from IRequestHandler<TRequest, TResponse>
                 if (SymbolEqualityComparer.Default.Equals(iface.OriginalDefinition, handlerInterface) &&
                     iface.TypeArguments.Length == 2 &&
                     iface.TypeArguments[0] is INamedTypeSymbol handledRequest)
                 {
-                    handledRequestTypes.Add(handledRequest);
+                    if (!handlersByRequest.TryGetValue(handledRequest, out var list))
+                    {
+                        list = new List<INamedTypeSymbol>();
+                        handlersByRequest[handledRequest] = list;
+                    }
+
+                    list.Add(type);
                 }
             }
         }
 
+        var reportedRequests = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
         foreach (var requestType in requestTypes)
         {
-            if (handledRequestTypes.Contains(requestType))
+            if (!handlersByRequest.TryGetValue(requestType, out var handlers) || handlers.Count == 0)
+            {
+                if (!reportedRequests.Add(requestType))
+                    continue;
+
+                var location = requestType.Locations.FirstOrDefault(l => l.IsInSource) ?? Location.None;
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        MissingHandlerRule,
+                        location,
+                        requestType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            }
+        }
+
+        foreach (var pair in handlersByRequest)
+        {
+            if (pair.Value.Count <= 1)
                 continue;
 
-            var location = requestType.Locations.FirstOrDefault(l => l.IsInSource) ?? Location.None;
+            var requestName = pair.Key.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
-            var diagnostic = Diagnostic.Create(
-                Rule,
-                location,
-                requestType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
-
-            context.ReportDiagnostic(diagnostic);
+            // Report on each duplicate handler
+            foreach (var handlerType in pair.Value)
+            {
+                var location = handlerType.Locations.FirstOrDefault(l => l.IsInSource) ?? Location.None;
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        DuplicateHandlerRule,
+                        location,
+                        requestName));
+            }
         }
     }
 
