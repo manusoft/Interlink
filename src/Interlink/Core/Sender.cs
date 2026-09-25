@@ -93,6 +93,43 @@ internal sealed class Sender : ISender
         return Send<Unit>(request, cancellationToken);
     }
 
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+        IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null)
+            throw new ArgumentNullException(nameof(request));
+
+        var requestType = request.GetType();
+        var responseType = typeof(TResponse);
+
+        var handlerType = typeof(IStreamRequestHandler<,>).MakeGenericType(requestType, responseType);
+        dynamic handler = ResolveRequired(handlerType, requestType);
+
+        // Handler
+        StreamHandlerDelegate<TResponse> pipeline = () =>
+            ((dynamic)handler).Handle((dynamic)request, cancellationToken);
+
+        var behaviorType = typeof(IStreamPipelineBehavior<,>).MakeGenericType(requestType, responseType);
+        var behaviors = ResolveEnumerable(behaviorType)
+            .Select(b => (Instance: b, Order: GetOrder(b.GetType())))
+            .OrderBy(x => x.Order)
+            .Select(x => x.Instance)
+            .ToList();
+
+        // Behaviors
+        for (var i = behaviors.Count - 1; i >= 0; i--)
+        {
+            var behavior = behaviors[i];
+            var next = pipeline;
+            pipeline = () => ((dynamic)behavior).Handle((dynamic)request, next, cancellationToken);
+        }
+
+        return pipeline();
+    }
+
     private object ResolveRequired(Type serviceType, Type requestType)
     {
         var instance = _serviceFactory(serviceType);

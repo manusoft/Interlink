@@ -14,18 +14,14 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The service collection to add services to.</param>
     /// <param name="configure">
-    /// Optional configuration callback used to register open-generic pipeline behaviors
-    /// and to supply a custom service factory.
+    /// Optional configuration callback used to register open-generic pipeline behaviors,
+    /// publish strategy, timeouts, and to supply a custom service factory.
     /// </param>
     /// <param name="assemblies">
-    /// Assemblies to scan for <see cref="IRequestHandler{TRequest,TResponse}"/>,
-    /// <see cref="INotificationHandler{TNotification}"/>,
-    /// <see cref="IRequestPreProcessor{TRequest}"/> and
-    /// <see cref="IRequestPostProcessor{TRequest,TResponse}"/> implementations.
+    /// Assemblies to scan for handlers and processors.
     /// When omitted, the calling assembly is scanned.
     /// </param>
     /// <returns>The same <see cref="IServiceCollection"/> instance so that calls can be chained.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="services"/> is null.</exception>
     public static IServiceCollection AddInterlink(
         this IServiceCollection services,
         Action<InterlinkOptions>? configure = null,
@@ -37,13 +33,34 @@ public static class ServiceCollectionExtensions
         var options = new InterlinkOptions();
         configure?.Invoke(options);
 
+        // Make options available to TimeoutBehavior and Publisher
+        services.AddSingleton(options);
+
         if (assemblies is null || assemblies.Length == 0)
             assemblies = new[] { Assembly.GetCallingAssembly() };
 
-        // Register explicitly configured open-generic pipeline behaviors
+        // Request pipeline behaviors
         foreach (var (behaviorType, _) in options.OpenBehaviors)
         {
             services.AddScoped(typeof(IPipelineBehavior<,>), behaviorType);
+        }
+
+        // Notification pipeline behaviors
+        foreach (var (behaviorType, _) in options.OpenNotificationBehaviors)
+        {
+            services.AddScoped(typeof(INotificationPipelineBehavior<>), behaviorType);
+        }
+
+        // Stream pipeline behaviors
+        foreach (var (behaviorType, _) in options.OpenStreamBehaviors)
+        {
+            services.AddScoped(typeof(IStreamPipelineBehavior<,>), behaviorType);
+        }
+
+        // Built-in timeout behavior when configured
+        if (options.DefaultRequestTimeout is { } timeout && timeout > TimeSpan.Zero)
+        {
+            services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TimeoutBehavior<,>));
         }
 
         // Scan assemblies for handlers and processors
@@ -53,22 +70,24 @@ public static class ServiceCollectionExtensions
             RegisterClosedGenericImplementations(services, assembly, typeof(INotificationHandler<>));
             RegisterClosedGenericImplementations(services, assembly, typeof(IRequestPreProcessor<>));
             RegisterClosedGenericImplementations(services, assembly, typeof(IRequestPostProcessor<,>));
+            RegisterClosedGenericImplementations(services, assembly, typeof(INotificationPipelineBehavior<>));
+            RegisterClosedGenericImplementations(services, assembly, typeof(IStreamRequestHandler<,>));
+            RegisterClosedGenericImplementations(services, assembly, typeof(IStreamPipelineBehavior<,>));
         }
 
-        // Register core sender / publisher, honouring any custom factory
-        if (options.ServiceFactory is not null)
+        var factory = options.ServiceFactory;
+
+        if (factory is not null)
         {
-            var factory = options.ServiceFactory;
             services.AddScoped<ISender>(sp => new Sender(sp, factory));
-            services.AddScoped<IPublisher>(sp => new Publisher(sp, factory));
+            services.AddScoped<IPublisher>(sp => new Publisher(sp, options, factory));
         }
         else
         {
             services.AddScoped<ISender, Sender>();
-            services.AddScoped<IPublisher, Publisher>();
+            services.AddScoped<IPublisher>(sp => new Publisher(sp, options));
         }
 
-        // Mediator (composes ISender + IPublisher)
         services.AddScoped<IMediator, Mediator>();
 
         return services;

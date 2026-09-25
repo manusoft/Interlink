@@ -32,6 +32,10 @@
 
 * 🧩 Simple mediator pattern for request/response
 * 🔁 Publish/Subscribe notification system
+* ⚡ Notification publish strategies (sequential / parallel)
+* 🔔 Notification pipeline behaviors
+* ⏱️ Optional request timeout behavior
+* 📡 Streaming requests (`IStreamRequest` / `CreateStream`)
 * 🎯 Unified `IMediator` (combines `ISender` + `IPublisher`)
 * ⚪ `Unit` support for fire-and-forget / void commands (`IRequest` / `IRequest<Unit>`)
 * 🔧 Pipeline behaviors (logging, validation, etc.)
@@ -44,6 +48,7 @@
 * 🚨 Dedicated `HandlerNotFoundException`
 * ✅ Compatible with .NET Standard 2.0+ to .NET 10
 * 📦 Optional packages: Logging, FluentValidation, ASP.NET Core, Analyzer
+
 
 ---
 
@@ -346,6 +351,94 @@ They are discovered automatically by `AddInterlink()`.
 
 ---
 
+---
+
+## 📡 Streaming requests (v1.6)
+
+```csharp
+public sealed record ExportPetsStream : IStreamRequest<PetDto>;
+
+public sealed class ExportPetsStreamHandler : IStreamRequestHandler<ExportPetsStream, PetDto>
+{
+    public async IAsyncEnumerable<PetDto> Handle(
+        ExportPetsStream request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var pet in _repository.StreamAllAsync(cancellationToken))
+            yield return pet;
+    }
+}
+
+// Consumer
+await foreach (var pet in sender.CreateStream(new ExportPetsStream(), ct))
+{
+    // process each item
+}
+
+// or via IMediator
+await foreach (var pet in mediator.CreateStream(new ExportPetsStream(), ct))
+{
+    // ...
+}
+```
+
+Register stream pipeline behaviors:
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.AddStreamBehavior(typeof(MyStreamBehavior<,>));
+}, typeof(MyHandler).Assembly);
+```
+
+## ⚡ Notification publish strategies (v1.6)
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.PublishStrategy = PublishStrategy.Parallel; // or Sequential (default)
+}, typeof(MyHandler).Assembly);
+```
+
+- **Sequential** — handlers run one after another (ordering preserved).
+- **Parallel** — handlers run concurrently via `Task.WhenAll`.
+
+## 🔔 Notification pipeline behaviors (v1.6)
+
+```csharp
+public sealed class NotificationLoggingBehavior<TNotification> : INotificationPipelineBehavior<TNotification>
+    where TNotification : INotification
+{
+    public async Task Handle(
+        TNotification notification,
+        NotificationHandlerDelegate next,
+        CancellationToken cancellationToken)
+    {
+        // before
+        await next(cancellationToken);
+        // after
+    }
+}
+
+builder.Services.AddInterlink(options =>
+{
+    options.AddNotificationBehavior(typeof(NotificationLoggingBehavior<>));
+});
+```
+
+## ⏱️ Request timeout (v1.6)
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.DefaultRequestTimeout = TimeSpan.FromSeconds(30);
+}, typeof(MyHandler).Assembly);
+```
+
+Registers `TimeoutBehavior<,>` automatically. Exceeding the timeout throws `TimeoutException`.
+
+---
+
 ## 📋 Built-in Logging Behavior
 
 ```bash
@@ -420,7 +513,10 @@ The filter maps:
 dotnet add package Interlink.Analyzers
 ```
 
-Produces diagnostic **ILINK001** (warning) when a type implements `IRequest<TResponse>` but no corresponding `IRequestHandler<TRequest, TResponse>` is found in the compilation.
+| Id | Meaning |
+|----|---------|
+| **ILINK001** | Request has no handler |
+| **ILINK002** | Multiple handlers for the same request (v1.6) |
 
 ---
 
@@ -515,6 +611,25 @@ public interface IRequestPostProcessor<in TRequest, in TResponse> where TRequest
 }
 ```
 
+### Streaming requests
+```csharp
+public interface IStreamRequest<out TResponse> { }
+
+public interface IStreamRequestHandler<in TRequest, TResponse>
+    where TRequest : IStreamRequest<TResponse>
+{
+    IAsyncEnumerable<TResponse> Handle(TRequest request, CancellationToken cancellationToken);
+}
+```
+
+Register stream pipeline behaviors:
+```csharp
+builder.Services.AddInterlink(opt =>
+{
+    opt.AddStreamBehavior(typeof(StreamLoggingBehavior<,>));
+}, typeof(MyHandler).Assembly);
+```
+
 ### Exception
 
 ```csharp
@@ -535,11 +650,13 @@ public class HandlerNotFoundException : InvalidOperationException
 | 1.4       | ✅ Released | .NET Standard 2.0+                                                         |
 | 1.5       | ✅ Released | Logging, Validation, ASP.NET Core, Analyzer, exceptions, ordering fixes    |
 | 1.5.1     | ✅ Released | `Unit` support for fire-and-forget / void commands (`IRequest` / `IRequest<Unit>`) |
-| **1.5.2** | ✅ Current  | Added unified `IMediator` interface (composes `ISender` + `IPublisher`)    |
+| 1.5.2     | ✅ Released | Added unified `IMediator` interface (composes `ISender` + `IPublisher`)    |
+| **1.6**   | 🔄 Current  | Streaming requests, notification publish strategies, notification pipeline behaviors, request timeout behavior |
+
 
 ### Future ideas
 
-* Request cancellation / timeout behaviors
+* Request cancellation
 * Metrics & tracing support
 * Dynamic / externalized pipeline configuration
 
@@ -548,3 +665,19 @@ public class HandlerNotFoundException : InvalidOperationException
 ## 📜 License
 
 MIT License © ManuHub
+
+---
+
+## 👨‍💻 Author
+
+**Manoj Babu**, 
+ManuHub
+
+## 👥 Contributors
+
+Thanks to all contributors ❤️
+
+<a href="https://github.com/manusoft/Interlink/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=manusoft/Interlink" />
+</a>
+

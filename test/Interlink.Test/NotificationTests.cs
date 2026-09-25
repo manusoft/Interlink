@@ -29,7 +29,7 @@ public class NotificationTests
     }
 }
 
-public class MyTestNotification : INotification 
+public class MyTestNotification : INotification
 {
     public string Message { get; set; } = "Test notification";
 }
@@ -44,7 +44,6 @@ public class NotificationCounter
 
     public void Reset() => Interlocked.Exchange(ref _count, 0);
 }
-
 
 public class Handler1 : INotificationHandler<MyTestNotification>
 {

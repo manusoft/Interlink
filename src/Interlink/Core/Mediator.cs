@@ -19,6 +19,11 @@ internal sealed class Mediator : IMediator
     public Task Send(IRequest request, CancellationToken cancellationToken = default)
         => _sender.Send(request, cancellationToken);
 
+    public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+        IStreamRequest<TResponse> request,
+        CancellationToken cancellationToken = default)
+        => _sender.CreateStream(request, cancellationToken);
+
     public Task Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)
         where TNotification : INotification
         => _publisher.Publish(notification, cancellationToken);

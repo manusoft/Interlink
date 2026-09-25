@@ -10,7 +10,7 @@
 	<AssemblyName>Interlink</AssemblyName>
 	<RootNamespace>Interlink</RootNamespace>
 	<PackageId>Interlink</PackageId>
-	<Version>1.5.2</Version>
+	<Version>1.6.0</Version>
 	<Description>A lightweight and minimal mediator library for .NET. Interlink helps you decouple your application using request/response and notification patterns with simple, clean code.</Description>
 	<Copyright>Copyright © 2025-2026 ManuHub</Copyright>
 	<Authors>Manojbabu</Authors>
@@ -33,12 +33,13 @@
 	
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
 	  <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+	  <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>
-	  <Content Include="icon.png" Pack="true" PackagePath="" Condition="Exists('icon.png')"/>
-	  <Content Include="README.md" Pack="true" PackagePath="" Condition="Exists('README.md')"/>
-	  <Content Include="LICENSE.txt" Pack="true" PackagePath="" Condition="Exists('LICENSE.txt')"/>
+	  <Content Include="icon.png" Pack="true" PackagePath="" Condition="Exists('icon.png')" />
+	  <Content Include="README.md" Pack="true" PackagePath="" Condition="Exists('README.md')" />
+	  <Content Include="LICENSE.txt" Pack="true" PackagePath="" Condition="Exists('LICENSE.txt')" />
   </ItemGroup>
 
 </Project>
