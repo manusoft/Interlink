@@ -123,6 +123,7 @@
                             <li><a href="#notifications" class="text-slate-300 hover:text-white transition block py-1">Notifications & Pub/Sub</a></li>
                             <li><a href="#pipeline" class="text-slate-300 hover:text-white transition block py-1">Pipeline Behaviors</a></li>
                             <li><a href="#pre-post" class="text-slate-300 hover:text-white transition block py-1">Pre & Post Processors</a></li>
+                            <li><a href="#streaming" class="text-slate-300 hover:text-white transition block py-1">Streaming Requests</a></li>
                         </ul>
                     </div>
 
@@ -175,6 +176,12 @@
                     <ul class="grid sm:grid-cols-2 gap-3 text-slate-300 text-sm">
                         <li class="flex items-start gap-2"><span class="text-indigo-400">🧩</span> Simple mediator pattern for request/response</li>
                         <li class="flex items-start gap-2"><span class="text-indigo-400">🔁</span> Publish/Subscribe notification system</li>
+                        <li class="flex items-start gap-2"><span class="text-indigo-400">⚡</span> Notification publish strategies (sequential / parallel)</li>
+                        <li class="flex items-start gap-2"><span class="text-indigo-400">🔔</span> Notification pipeline behaviors</li>
+                        <li class="flex items-start gap-2"><span class="text-indigo-400">⏱️</span> Optional request timeout behavior</li>
+                        <li class="flex items-start gap-2"><span class="text-indigo-400">📡</span> Streaming requests <code class="text-indigo-300">IStreamRequest</code> / <code class="text-indigo-300">CreateStream</code></li>
+                        <li class="flex items-start gap-2"><span class="text-indigo-400">🎯</span> Unified <code class="text-indigo-300">IMediator</code> combines <code class="text-indigo-300">ISender + IPublisher</code></li>
+                        <li class="flex items-start gap-2"><span class="text-indigo-400">⚪</span> <code class="text-indigo-300">Unit</code> support for fire-and-forget / void commands <code class="text-indigo-300">IRequest or IRequest<Unit></code></li>
                         <li class="flex items-start gap-2"><span class="text-indigo-400">🔧</span> Pipeline behaviors (logging, validation, etc.)</li>
                         <li class="flex items-start gap-2"><span class="text-indigo-400">🧠</span> Clean separation of concerns via handlers</li>
                         <li class="flex items-start gap-2"><span class="text-indigo-400">🪝</span> Dependency injection support out of the box</li>
@@ -367,7 +374,7 @@ builder.Services.AddInterlinkAspNetCore();</code></pre>
                         <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 text-xs text-slate-400 font-mono">TimingBehavior.cs</div>
                         <div class="p-4 overflow-x-auto">
 <pre class="text-xs text-slate-300 leading-relaxed"><code><span class="text-indigo-400">public sealed class</span> <span class="text-amber-300">TimingBehavior</span>&lt;TRequest, TResponse&gt; : <span class="text-emerald-400">IPipelineBehavior</span>&lt;TRequest, TResponse&gt;
-    <span class="text-indigo-400">where</span> TRequest : <span class="text-indigo-400">notnull</span>
+<span class="text-indigo-400">where</span> TRequest : <span class="text-indigo-400">notnull</span>
 {
     <span class="text-indigo-400">public async</span> Task&lt;TResponse&gt; Handle(
         TRequest request,
@@ -435,6 +442,91 @@ options.AddBehavior(typeof(SecondBehavior&lt;,&gt;), order: 2);</code></pre>
 
                 <hr class="border-slate-800">
 
+                <!-- Streaming Requests -->
+                <section id="streaming" class="scroll-mt-24">
+                    <h2 class="text-2xl font-bold text-white mb-4">Streaming Requests</h2>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        Stream large result sets with <code class="text-indigo-300">IStreamRequest&lt;T&gt;</code>
+                        and <code class="text-indigo-300">IAsyncEnumerable&lt;T&gt;</code>.
+                        Handlers yield items incrementally; consumers use
+                        <code class="text-indigo-300">CreateStream</code> on
+                        <code class="text-indigo-300">ISender</code> / <code class="text-indigo-300">IMediator</code>.
+                    </p>
+
+                    <h3 class="text-lg font-semibold text-white mb-3">Request &amp; handler</h3>
+                    <div class="bg-cardBg rounded-xl border border-slate-800 overflow-hidden mb-6">
+                        <div class="p-4 overflow-x-auto">
+<pre class="text-xs text-slate-300 leading-relaxed"><code><span class="text-indigo-400">public sealed record</span> <span class="text-amber-300">ExportPetsStream</span> : <span class="text-emerald-400">IStreamRequest</span>&lt;Pet&gt;;
+
+<span class="text-indigo-400">public sealed class</span> <span class="text-amber-300">ExportPetsStreamHandler</span> : <span class="text-emerald-400">IStreamRequestHandler</span>&lt;ExportPetsStream, Pet&gt;
+{
+    <span class="text-indigo-400">public async</span> IAsyncEnumerable&lt;Pet&gt; Handle(
+        ExportPetsStream request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        <span class="text-indigo-400">await foreach</span> (<span class="text-indigo-400">var</span> pet <span class="text-indigo-400">in</span> _db.Pets.AsAsyncEnumerable().WithCancellation(cancellationToken))
+        <span class="text-indigo-400">yield return</span> pet;
+    }
+}</code></pre>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-semibold text-white mb-3">Consume the stream</h3>
+                    <div class="bg-cardBg rounded-xl border border-slate-800 overflow-hidden mb-6">
+                        <div class="p-4 overflow-x-auto">
+<pre class="text-xs text-slate-300 leading-relaxed"><code><span class="text-comment text-slate-500">// Via ISender or IMediator</span>
+<span class="text-indigo-400">await foreach</span> (<span class="text-indigo-400">var</span> pet <span class="text-indigo-400">in</span> sender.CreateStream(<span class="text-indigo-400">new</span> ExportPetsStream(), cancellationToken))
+{
+    <span class="text-comment text-slate-500">// process each item</span>
+}</code></pre>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-semibold text-white mb-3">ASP.NET Core action</h3>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        Return <code class="text-indigo-300">IAsyncEnumerable&lt;T&gt;</code> from the action
+                        (not <code class="text-indigo-300">Task&lt;IActionResult&gt;</code> with <code class="text-indigo-300">yield return</code>).
+                    </p>
+                    <div class="bg-cardBg rounded-xl border border-slate-800 overflow-hidden mb-6">
+                        <div class="p-4 overflow-x-auto">
+<pre class="text-xs text-slate-300 leading-relaxed"><code>[HttpGet(<span class="text-emerald-300">"stream"</span>)]
+<span class="text-indigo-400">public</span> IAsyncEnumerable&lt;Pet&gt; GetAllPetsStream(CancellationToken cancellationToken)
+    =&gt; mediator.CreateStream(<span class="text-indigo-400">new</span> ExportPetsStream(), cancellationToken);</code></pre>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-semibold text-white mb-3">Stream pipeline behaviors</h3>
+                    <p class="text-slate-300 leading-relaxed mb-4">
+                        Register open-generic stream behaviors with
+                        <code class="text-indigo-300">options.AddStreamBehavior(...)</code>.
+                    </p>
+                    <div class="bg-cardBg rounded-xl border border-slate-800 overflow-hidden">
+                        <div class="p-4 overflow-x-auto">
+<pre class="text-xs text-slate-300 leading-relaxed"><code><span class="text-indigo-400">public sealed class</span> <span class="text-amber-300">StreamLoggingBehavior</span>&lt;TRequest, TResponse&gt;
+    : <span class="text-emerald-400">IStreamPipelineBehavior</span>&lt;TRequest, TResponse&gt;
+                            <span class="text-indigo-400">where</span> TRequest : <span class="text-emerald-400">IStreamRequest</span>&lt;TResponse&gt;
+{
+    <span class="text-indigo-400">public async</span> IAsyncEnumerable&lt;TResponse&gt; Handle(
+        TRequest request,
+        StreamHandlerDelegate&lt;TResponse&gt; next,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        <span class="text-indigo-400">await foreach</span> (<span class="text-indigo-400">var</span> item <span class="text-indigo-400">in</span> next().WithCancellation(cancellationToken))
+        <span class="text-indigo-400">yield return</span> item;
+    }
+}
+
+<span class="text-comment text-slate-500">// Registration</span>
+builder.Services.AddInterlink(options =&gt;
+{
+    options.AddStreamBehavior(<span class="text-indigo-400">typeof</span>(StreamLoggingBehavior&lt;,&gt;));
+}, <span class="text-indigo-400">typeof</span>(ExportPetsStreamHandler).Assembly);</code></pre>
+                        </div>
+                    </div>
+                </section>
+
+                <hr class="border-slate-800">
+
                 <!-- Logging -->
                 <section id="logging" class="scroll-mt-24">
                     <h2 class="text-2xl font-bold text-white mb-4">Built-in Logging Behavior</h2>
@@ -461,7 +553,7 @@ options.AddBehavior(typeof(SecondBehavior&lt;,&gt;), order: 2);</code></pre>
                         <div class="p-4 overflow-x-auto">
 <pre class="text-xs text-slate-300 leading-relaxed"><code><span class="text-indigo-400">public sealed class</span> <span class="text-amber-300">CreateUserValidator</span> : AbstractValidator&lt;CreateUser.Command&gt;
 {
-    <span class="text-indigo-400">public</span> CreateUserValidator()
+                            <span class="text-indigo-400">public</span> CreateUserValidator()
     {
         RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
@@ -535,7 +627,7 @@ builder.Services.AddInterlinkAspNetCore();  // adds InterlinkExceptionFilter</co
 <pre class="text-xs text-slate-300 leading-relaxed"><code><span class="text-indigo-400">public interface</span> <span class="text-amber-300">IRequest</span>&lt;<span class="text-indigo-400">out</span> TResponse&gt; { }
 
 <span class="text-indigo-400">public interface</span> <span class="text-amber-300">IRequestHandler</span>&lt;<span class="text-indigo-400">in</span> TRequest, TResponse&gt;
-    <span class="text-indigo-400">where</span> TRequest : IRequest&lt;TResponse&gt;
+                            <span class="text-indigo-400">where</span> TRequest : IRequest&lt;TResponse&gt;
 {
     Task&lt;TResponse&gt; Handle(TRequest request, CancellationToken cancellationToken);
 }
@@ -543,7 +635,7 @@ builder.Services.AddInterlinkAspNetCore();  // adds InterlinkExceptionFilter</co
 <span class="text-indigo-400">public interface</span> <span class="text-amber-300">INotification</span> { }
 
 <span class="text-indigo-400">public interface</span> <span class="text-amber-300">INotificationHandler</span>&lt;<span class="text-indigo-400">in</span> TNotification&gt;
-    <span class="text-indigo-400">where</span> TNotification : INotification
+                            <span class="text-indigo-400">where</span> TNotification : INotification
 {
     Task Handle(TNotification notification, CancellationToken cancellationToken);
 }</code></pre>
