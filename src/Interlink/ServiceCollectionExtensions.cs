@@ -22,10 +22,9 @@ public static class ServiceCollectionExtensions
     /// When omitted, the calling assembly is scanned.
     /// </param>
     /// <returns>The same <see cref="IServiceCollection"/> instance so that calls can be chained.</returns>
-    public static IServiceCollection AddInterlink(
-        this IServiceCollection services,
-        Action<InterlinkOptions>? configure = null,
-        params Assembly[] assemblies)
+    public static IServiceCollection AddInterlink(this IServiceCollection services,
+                                                  Action<InterlinkOptions>? configure = null,
+                                                  params Assembly[] assemblies)
     {
         if (services is null)
             throw new ArgumentNullException(nameof(services));
@@ -68,6 +67,7 @@ public static class ServiceCollectionExtensions
         {
             RegisterClosedGenericImplementations(services, assembly, typeof(IRequestHandler<,>));
             RegisterClosedGenericImplementations(services, assembly, typeof(INotificationHandler<>));
+            RegisterClosedGenericImplementations(services, assembly, typeof(INotificationExceptionHandler<,>));
             RegisterClosedGenericImplementations(services, assembly, typeof(IRequestPreProcessor<>));
             RegisterClosedGenericImplementations(services, assembly, typeof(IRequestPostProcessor<,>));
             RegisterClosedGenericImplementations(services, assembly, typeof(INotificationPipelineBehavior<>));
@@ -93,10 +93,9 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static void RegisterClosedGenericImplementations(
-        IServiceCollection services,
-        Assembly assembly,
-        Type openGenericType)
+    private static void RegisterClosedGenericImplementations(IServiceCollection services,
+                                                             Assembly assembly,
+                                                             Type openGenericType)
     {
         foreach (var (serviceType, implementationType) in TypeScanner.Scan(assembly, openGenericType))
         {

@@ -10,7 +10,7 @@
 	<AssemblyName>Interlink</AssemblyName>
 	<RootNamespace>Interlink</RootNamespace>
 	<PackageId>Interlink</PackageId>
-	<Version>1.6.0</Version>
+	<Version>1.7.0</Version>
 	<Description>A lightweight and minimal mediator library for .NET. Interlink helps you decouple your application using request/response and notification patterns with simple, clean code.</Description>
 	<Copyright>Copyright © 2025-2026 ManuHub</Copyright>
 	<Authors>Manojbabu</Authors>

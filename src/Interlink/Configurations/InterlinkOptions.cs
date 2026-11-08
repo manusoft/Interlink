@@ -24,6 +24,13 @@ public class InterlinkOptions
     public PublishStrategy PublishStrategy { get; set; } = PublishStrategy.Sequential;
 
     /// <summary>
+    /// Gets or sets how exceptions from notification handlers are handled.
+    /// Default is <see cref="NotificationExceptionStrategy.StopOnFirst"/>.
+    /// </summary>
+    public NotificationExceptionStrategy NotificationExceptionStrategy { get; set; }
+        = NotificationExceptionStrategy.StopOnFirst;
+
+    /// <summary>
     /// Gets or sets an optional default timeout applied to all requests via
     /// <see cref="TimeoutBehavior{TRequest,TResponse}"/>.
     /// When null, no timeout behavior is registered.
@@ -117,3 +124,4 @@ public class InterlinkOptions
         AddStreamBehavior(typeof(TBehavior), order);
     }
 }
+

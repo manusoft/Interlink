@@ -40,6 +40,7 @@ jobs:
           mkdir -p nupkgs
           dotnet pack src/Interlink/Interlink.csproj                         -c Release -o ./nupkgs --no-build
           dotnet pack src/Interlink.Extensions.Logging/Interlink.Extensions.Logging.csproj -c Release -o ./nupkgs --no-build
+          dotnet pack src/Interlink.Extensions.Validation/Interlink.Extensions.Telemetry.csproj -c Release -o ./nupkgs --no-build
           dotnet pack src/Interlink.Extensions.Validation/Interlink.Extensions.Validation.csproj -c Release -o ./nupkgs --no-build
           dotnet pack src/Interlink.AspNetCore/Interlink.AspNetCore.csproj  -c Release -o ./nupkgs --no-build
           dotnet pack src/Interlink.Analyzers/Interlink.Analyzers.csproj     -c Release -o ./nupkgs --no-build
