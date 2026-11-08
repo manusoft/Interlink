@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
@@ -12,9 +12,13 @@
     <Description>OpenTelemetry-style Activity instrumentation for Interlink mediator requests, streams, and notifications.</Description>
     <Authors>Manojbabu</Authors>
     <PackageTags>interlink mediator telemetry opentelemetry activity diagnostics</PackageTags>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <IsPackable>true</IsPackable>
+	<PackageProjectUrl>https://manusoft.github.io/Interlink</PackageProjectUrl>
+	<RepositoryUrl>https://github.com/manusoft/Interlink-cqrs-library</RepositoryUrl>
+	<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<PackageIcon>icon.png</PackageIcon>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+	<IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,7 +31,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="" />
+	<Content Include="icon.png" Pack="true" PackagePath="" Condition="Exists('icon.png')" />
+	<Content Include="README.md" Pack="true" PackagePath="" Condition="Exists('README.md')" />
+	<Content Include="LICENSE.txt" Pack="true" PackagePath="" Condition="Exists('LICENSE.txt')" />
   </ItemGroup>
 
 </Project>
