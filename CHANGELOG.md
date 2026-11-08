@@ -1,131 +1,95 @@
 # Changelog
 
-## [1.5.2] - 2026-08-13
+All notable changes to **Interlink** are documented in this file.
+
+## [1.7.0] - 2026-11-08
 
 ### Added
-- **Unified `IMediator`** – new interface that inherits from both `ISender` and `IPublisher`.
-- **`Mediator` implementation** – lightweight composition of the existing `Sender` and `Publisher`.
-- `IMediator` is now registered by default in `AddInterlink()`.
+
+- **NotificationExceptionStrategy** on `InterlinkOptions`:
+  - `StopOnFirst` (default) — rethrow the first handler failure
+  - `Aggregate` — run all handlers, then throw `AggregateException` if any failed
+  - `Continue` — run all handlers; failures handled by exception handlers and not rethrown by default
+- **`INotificationExceptionHandler<TNotification, TException>`** — handle per-handler failures (logging, outbox, compensation)
+- **`NotificationHandlerException`** — wraps a single handler failure with `NotificationType` and `HandlerType`
+- **`Interlink.Extensions.Telemetry`** — Activity instrumentation for:
+  - `Send` → `Interlink.Send {Request}`
+  - `Publish` → `Interlink.Publish {Notification}`
+  - `CreateStream` → `Interlink.CreateStream {Request}`
+- Registration: `services.AddInterlinkTelemetry()`
+- Activity source name: **`Interlink`**
+- Unit tests for Aggregate, Continue, StopOnFirst, and exception handler invocation
 
 ### Changed
-- Users can now inject `IMediator`, `ISender`, or `IPublisher` independently (full backward compatibility).
+
+- `Publisher` applies `NotificationExceptionStrategy` and dispatches notification exception handlers before rethrowing or continuing
+- Assembly scanning registers `INotificationExceptionHandler<,>` implementations
+
+### Packages
+
+| Package | Version |
+|---------|---------|
+| Interlink | 1.7.0 |
+| Interlink.Extensions.Telemetry | 1.7.0 |
+| Interlink.Extensions.Logging | 1.7.0 |
+| Interlink.Extensions.Validation | 1.7.0 |
+| Interlink.AspNetCore | 1.7.0 |
+| Interlink.Analyzers | 1.7.0 |
 
 ---
 
-## [1.5.1] - 2026-08-XX
+## [1.6.0]
 
 ### Added
-- **`Unit` support** – non-generic `IRequest` (equivalent to `IRequest<Unit>`) for fire-and-forget / void commands.
-- `Unit` struct with `Unit.Value`.
-- Convenience overload `ISender.Send(IRequest request)` that maps to `Send<Unit>()`.
+
+- **Streaming requests** — `IStreamRequest<T>`, `IStreamRequestHandler<TRequest,TResponse>`, `ISender.CreateStream` / `IMediator.CreateStream`
+- **Stream pipeline behaviors** — `IStreamPipelineBehavior<TRequest,TResponse>`, `AddStreamBehavior`
+- **Publish strategies** — `PublishStrategy.Sequential` (default) and `PublishStrategy.Parallel`
+- **Notification pipeline behaviors** — `INotificationPipelineBehavior<T>`, `AddNotificationBehavior`
+- **Request timeout** — `InterlinkOptions.DefaultRequestTimeout` + built-in `TimeoutBehavior<,>`
+- **ILINK002** analyzer — duplicate request handlers
 
 ### Changed
-- Documentation and examples updated to show `Unit` usage.
+
+- `Publisher` supports publish strategies and notification pipelines
+- Analyzer detects both `IRequestHandler<TRequest>` and `IRequestHandler<TRequest,TResponse>`
 
 ---
 
-## [1.5.0] - 2026-07-31
+## [1.5.2]
 
 ### Added
-- **HandlerNotFoundException** – dedicated exception type thrown when a request has no registered handler.
-- **Pipeline ordering** – `PipelineOrderAttribute` is now respected; behaviors are sorted ascending (lowest order runs outermost).
-- **Custom service factory** – fully wired via `InterlinkOptions.ServiceFactory`.
-- **Interlink.Extensions.Logging** – `LoggingBehavior<TRequest,TResponse>` + `AddInterlinkLogging()`.
-- **Interlink.Extensions.Validation** – FluentValidation integration (`ValidationBehavior` + `AddInterlinkValidation()` with optional assembly scanning).
-- **Interlink.AspNetCore** – `InterlinkExceptionFilter` (maps `HandlerNotFoundException` and optional FluentValidation exceptions to ProblemDetails) + `AddInterlinkAspNetCore()`.
-- **Interlink.Analyzers** – Roslyn analyzer (`ILINK001`) that warns when an `IRequest<T>` has no corresponding `IRequestHandler`.
-- XML documentation comments on all public APIs.
+
+- Unified **`IMediator`** interface (composes `ISender` + `IPublisher`)
+
+---
+
+## [1.5.1]
+
+### Added
+
+- **`Unit`** and non-generic **`IRequest`** / **`IRequestHandler<TRequest>`** for void-style commands
+- **`ISender.Send(IRequest)`** convenience overload
 
 ### Fixed
-- Pipeline behavior signature documentation now matches the actual `Handle(request, next, cancellationToken)` order.
-- Removed dead / commented-out code in `ServiceCollectionExtensions`.
-- Removed unused `HandlerResolver`.
-- Consolidated type-scanning cache.
-- Publisher now uses the same dynamic dispatch style as Sender (no reflection `Invoke`).
-- `InterlinkOptions.AddBehavior` supports an optional explicit order parameter.
-- Proper null checks and `ArgumentNullException` on public entry points.
 
-### Changed
-- Version bumped to 1.5.0.
-- `Sender` and `Publisher` are now `sealed`.
-- Pre-processors run before the pipeline; post-processors run after a successful pipeline.
+- Analyzer packaging (`build/Interlink.Analyzers.props`) for reliable NuGet consumption
 
 ---
 
-## [1.4.0] - Previous
-
-### Changed
-- Officially targets .NET Standard 2.0+ (improved multi-targeting and compatibility)
-
-### Fixed
-- Minor packaging and target framework alignment issues
-
----
-
-## [1.3.1] - Previous
-
-### Changed
-- Support .NET Standard 2.0+ (works in .NET Core, .NET 5+, .NET Framework 4.7.2+)
-
----
-
-## [1.3.0] — Performance & Customization
+## [1.5.0]
 
 ### Added
-- Handler resolution caching (delegate-based)
-- Custom service factory injection support
-- Pipeline ordering via attributes or configuration
-- Assembly scanning filters by namespace or attribute
+
+- `Interlink.Extensions.Logging`
+- `Interlink.Extensions.Validation` (FluentValidation)
+- `Interlink.AspNetCore` (exception filter → ProblemDetails)
+- `Interlink.Analyzers` (**ILINK001** missing handler)
+- `HandlerNotFoundException`
+- Pipeline ordering via `PipelineOrderAttribute` / `AddBehavior(..., order)`
 
 ---
 
-## [1.2.1] — Fix Critical Bugs
+## [1.4.x] and earlier
 
-### Fixed
-- Critical bugs in `IPipelineBehavior<TRequest, TResponse>`
-
----
-
-## [1.2.0] — Pre/Post Processors
-
-### Added
-- `IRequestPreProcessor<TRequest>` interface
-- `IRequestPostProcessor<TRequest, TResponse>` interface
-- Pre and post hooks for request lifecycle
-- Optional unit-of-work behaviors
-
----
-
-## [1.1.0] — Notifications & Pipelines
-
-### Added
-- `INotification` and `INotificationHandler<TNotification>`
-- `IPublisher` for event broadcasting
-- `IPipelineBehavior<TRequest, TResponse>` support
-- Enhanced `AddInterlink()` with scanning and registration for notifications and pipelines
-- Updated documentation and examples
-- .NET 8+ support
-
----
-
-## [1.0.1] — Core Mediator Basics
-
-### Changed
-- .NET 8+ support
-
-### Added
-- Basic `IRequest<TResponse>` and `IRequestHandler<TRequest, TResponse>`
-- `ISender` for sending requests
-- `AddInterlink()` for automatic DI registration
-- Clean, lightweight design
-
----
-
-## [1.0.0] — Core Mediator Basics
-
-### Added
-- Basic `IRequest<TResponse>` and `IRequestHandler<TRequest, TResponse>`
-- `ISender` for sending requests
-- `AddInterlink()` for automatic DI registration
-- Clean, lightweight design
-- Only .NET 9 support
+- Core mediator: request/response, notifications, pipeline behaviors, pre/post processors, DI scanning

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Interlink.Extensions.Telemetry</RootNamespace>
+    <AssemblyName>Interlink.Extensions.Telemetry</AssemblyName>
+    <PackageId>Interlink.Extensions.Telemetry</PackageId>
+    <Version>1.7.0</Version>
+    <Description>OpenTelemetry-style Activity instrumentation for Interlink mediator requests, streams, and notifications.</Description>
+    <Authors>Manojbabu</Authors>
+    <PackageTags>interlink mediator telemetry opentelemetry activity diagnostics</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Interlink\Interlink.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+</Project>

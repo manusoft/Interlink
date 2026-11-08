@@ -25,9 +25,11 @@
 * 🔍 Assembly scanning for automatic handler registration
 * 🧪 Custom service factory injection
 * 🔄 Pipeline ordering via attributes or configuration
-* 🚨 Dedicated `HandlerNotFoundException`
+* 🛡️ Notification exception strategies (`StopOnFirst` / `Aggregate` / `Continue`)
+* 🧰 `INotificationExceptionHandler` for per-handler failure recovery (outbox-friendly)
+* 🚨 Dedicated `HandlerNotFoundException` / `NotificationHandlerException`
 * ✅ Compatible with .NET Standard 2.0+ to .NET 10
-* 📦 Optional packages: Logging, FluentValidation, ASP.NET Core, Analyzer
+* 📦 Optional packages: Logging, FluentValidation, ASP.NET Core, Analyzer, **Telemetry**
 
 ---
 
@@ -42,6 +44,7 @@ Optional packages:
 ```bash
 dotnet add package Interlink.Extensions.Logging
 dotnet add package Interlink.Extensions.Validation
+dotnet add package Interlink.Extensions.Telemetry
 dotnet add package Interlink.AspNetCore
 dotnet add package Interlink.Analyzers
 ```
@@ -82,7 +85,8 @@ With the extension packages:
 builder.Services.AddInterlink(typeof(MyHandler).Assembly);
 builder.Services.AddInterlinkLogging();
 builder.Services.AddInterlinkValidation(typeof(MyValidator).Assembly);
-builder.Services.AddInterlinkAspNetCore(); // registers exception filter
+builder.Services.AddInterlinkTelemetry();    // Activity source "Interlink"
+builder.Services.AddInterlinkAspNetCore();   // registers exception filter
 ```
 
 ---
@@ -330,92 +334,6 @@ They are discovered automatically by `AddInterlink()`.
 
 ---
 
-## 📡 Streaming requests (v1.6)
-
-```csharp
-public sealed record ExportPetsStream : IStreamRequest<PetDto>;
-
-public sealed class ExportPetsStreamHandler : IStreamRequestHandler<ExportPetsStream, PetDto>
-{
-    public async IAsyncEnumerable<PetDto> Handle(
-        ExportPetsStream request,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await foreach (var pet in _repository.StreamAllAsync(cancellationToken))
-            yield return pet;
-    }
-}
-
-// Consumer
-await foreach (var pet in sender.CreateStream(new ExportPetsStream(), ct))
-{
-    // process each item
-}
-
-// or via IMediator
-await foreach (var pet in mediator.CreateStream(new ExportPetsStream(), ct))
-{
-    // ...
-}
-```
-
-Register stream pipeline behaviors:
-
-```csharp
-builder.Services.AddInterlink(options =>
-{
-    options.AddStreamBehavior(typeof(MyStreamBehavior<,>));
-}, typeof(MyHandler).Assembly);
-```
-
-## ⚡ Notification publish strategies (v1.6)
-
-```csharp
-builder.Services.AddInterlink(options =>
-{
-    options.PublishStrategy = PublishStrategy.Parallel; // or Sequential (default)
-}, typeof(MyHandler).Assembly);
-```
-
-- **Sequential** — handlers run one after another (ordering preserved).
-- **Parallel** — handlers run concurrently via `Task.WhenAll`.
-
-## 🔔 Notification pipeline behaviors (v1.6)
-
-```csharp
-public sealed class NotificationLoggingBehavior<TNotification> : INotificationPipelineBehavior<TNotification>
-    where TNotification : INotification
-{
-    public async Task Handle(
-        TNotification notification,
-        NotificationHandlerDelegate next,
-        CancellationToken cancellationToken)
-    {
-        // before
-        await next(cancellationToken);
-        // after
-    }
-}
-
-builder.Services.AddInterlink(options =>
-{
-    options.AddNotificationBehavior(typeof(NotificationLoggingBehavior<>));
-});
-```
-
-## ⏱️ Request timeout (v1.6)
-
-```csharp
-builder.Services.AddInterlink(options =>
-{
-    options.DefaultRequestTimeout = TimeSpan.FromSeconds(30);
-}, typeof(MyHandler).Assembly);
-```
-
-Registers `TimeoutBehavior<,>` automatically. Exceeding the timeout throws `TimeoutException`.
-
----
-
 ## 📋 Built-in Logging Behavior
 
 ```bash
@@ -428,9 +346,9 @@ builder.Services.AddInterlinkLogging();
 
 This registers `LoggingBehavior<TRequest, TResponse>`, which logs:
 
-- request start  
-- successful completion + elapsed milliseconds  
-- exceptions  
+- request start
+- successful completion + elapsed milliseconds
+- exceptions
 
 ---
 
@@ -484,16 +402,65 @@ The filter maps:
 
 ---
 
-## 🔍 Analyzer (missing handler detection)
+## 🔍 Analyzer (ILINK001 / ILINK002)
 
 ```bash
 dotnet add package Interlink.Analyzers
+dotnet add package Interlink
 ```
 
-| Id | Meaning |
-|----|---------|
-| **ILINK001** | Request has no handler |
-| **ILINK002** | Multiple handlers for the same request (v1.6) |
+| Id | Severity | Description |
+|----|----------|-------------|
+| **ILINK001** | Warning | Request has no matching handler |
+| **ILINK002** | Warning | More than one handler for the same request type |
+
+These are compilation-end diagnostics — they show after **Build / Rebuild** (`dotnet build` or Error List **Build Only**).
+
+### ILINK001 — Missing request handler
+
+```csharp
+using Interlink.Contracts;
+
+// Warning ILINK001: No handler found for request type 'GetAllPetsQuery'
+public sealed record GetAllPetsQuery : IRequest<List<string>>;
+```
+
+Clear it by adding a handler:
+
+```csharp
+using Interlink;
+
+public sealed class GetAllPetsHandler : IRequestHandler<GetAllPetsQuery, List<string>>
+{
+    public Task<List<string>> Handle(GetAllPetsQuery request, CancellationToken cancellationToken)
+        => Task.FromResult(new List<string> { "Dog", "Cat" });
+}
+```
+
+### ILINK002 — Duplicate request handler
+
+```csharp
+using Interlink;
+using Interlink.Contracts;
+
+public sealed record GetSomething : IRequest;
+
+public sealed class Handler1 : IRequestHandler<GetSomething>
+{
+    public Task<Unit> Handle(GetSomething request, CancellationToken cancellationToken)
+        => Unit.Task;
+}
+
+// Warning ILINK002 on Handler1 and Handler2:
+// Multiple handlers found for request type 'GetSomething'
+public sealed class Handler2 : IRequestHandler<GetSomething>
+{
+    public Task<Unit> Handle(GetSomething request, CancellationToken cancellationToken)
+        => Unit.Task;
+}
+```
+
+Keep **exactly one** handler per request type.
 
 ---
 
@@ -588,25 +555,6 @@ public interface IRequestPostProcessor<in TRequest, in TResponse> where TRequest
 }
 ```
 
-### Streaming requests
-```csharp
-public interface IStreamRequest<out TResponse> { }
-
-public interface IStreamRequestHandler<in TRequest, TResponse>
-    where TRequest : IStreamRequest<TResponse>
-{
-    IAsyncEnumerable<TResponse> Handle(TRequest request, CancellationToken cancellationToken);
-}
-```
-
-Register stream pipeline behaviors:
-```csharp
-builder.Services.AddInterlink(opt =>
-{
-    opt.AddStreamBehavior(typeof(StreamLoggingBehavior<,>));
-}, typeof(MyHandler).Assembly);
-```
-
 ### Exception
 
 ```csharp
@@ -627,17 +575,166 @@ public class HandlerNotFoundException : InvalidOperationException
 | 1.4       | ✅ Released | .NET Standard 2.0+                                                         |
 | 1.5       | ✅ Released | Logging, Validation, ASP.NET Core, Analyzer, exceptions, ordering fixes    |
 | 1.5.1     | ✅ Released | `Unit` support for fire-and-forget / void commands (`IRequest` / `IRequest<Unit>`) |
-| 1.5.2     | ✅ Released | Added unified `IMediator` interface (composes `ISender` + `IPublisher`)    |
-| **1.6**   | 🔄 Current  | Streaming requests, notification publish strategies, notification pipeline behaviors, request timeout behavior |
-
+| 1.5.2     | ✅ Released | Unified `IMediator` (`ISender` + `IPublisher`) |
+| 1.6.0     | ✅ Released | Streaming, publish strategies, notification pipelines, timeout, ILINK002 |
+| **1.7.0** | ✅ Current  | Notification exception strategies, exception handlers, Telemetry package |
 
 ### Future ideas
 
-* Request cancellation
-* Metrics & tracing support
+* Request exception handlers (`IRequestExceptionHandler`)
+* Constrained / filtered behaviors (command vs query vs stream)
+* Minimal API helpers
+* Source-generated handler registration (AOT-friendly)
 * Dynamic / externalized pipeline configuration
 
 ---
+
+## 📡 Streaming requests (v1.6)
+
+```csharp
+public sealed record ExportPetsStream : IStreamRequest<PetDto>;
+
+public sealed class ExportPetsStreamHandler : IStreamRequestHandler<ExportPetsStream, PetDto>
+{
+    public async IAsyncEnumerable<PetDto> Handle(
+        ExportPetsStream request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var pet in _repository.StreamAllAsync(cancellationToken))
+            yield return pet;
+    }
+}
+
+// Consumer
+await foreach (var pet in sender.CreateStream(new ExportPetsStream(), ct))
+{
+    // process each item
+}
+```
+
+Register stream pipeline behaviors:
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.AddStreamBehavior(typeof(MyStreamBehavior<,>));
+}, typeof(MyHandler).Assembly);
+```
+
+## ⚡ Notification publish strategies (v1.6)
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.PublishStrategy = PublishStrategy.Parallel; // or Sequential (default)
+}, typeof(MyHandler).Assembly);
+```
+
+- **Sequential** — handlers run one after another (ordering preserved).
+- **Parallel** — handlers run concurrently via `Task.WhenAll`.
+
+## 🔔 Notification pipeline behaviors (v1.6)
+
+```csharp
+public sealed class NotificationLoggingBehavior<TNotification> : INotificationPipelineBehavior<TNotification>
+    where TNotification : INotification
+{
+    public async Task Handle(
+        TNotification notification,
+        NotificationHandlerDelegate next,
+        CancellationToken cancellationToken)
+    {
+        // before
+        await next(cancellationToken);
+        // after
+    }
+}
+
+builder.Services.AddInterlink(options =>
+{
+    options.AddNotificationBehavior(typeof(NotificationLoggingBehavior<>));
+});
+```
+
+## ⏱️ Request timeout (v1.6)
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.DefaultRequestTimeout = TimeSpan.FromSeconds(30);
+}, typeof(MyHandler).Assembly);
+```
+
+Registers `TimeoutBehavior<,>` automatically. Exceeding the timeout throws `TimeoutException`.
+
+
+## 🛡️ Notification exception strategies (v1.7)
+
+When a notification handler throws, Interlink applies a configurable policy instead of leaving failure handling entirely to outbox workarounds.
+
+```csharp
+builder.Services.AddInterlink(options =>
+{
+    options.PublishStrategy = PublishStrategy.Parallel;
+    options.NotificationExceptionStrategy = NotificationExceptionStrategy.Aggregate;
+}, typeof(MyHandler).Assembly);
+```
+
+| Strategy | Behavior |
+|----------|----------|
+| **StopOnFirst** (default) | Stop and rethrow the first handler failure |
+| **Aggregate** | Run all handlers; if any failed, throw `AggregateException` |
+| **Continue** | Run all handlers; failures are dispatched to exception handlers and not rethrown |
+
+Failures are wrapped in `NotificationHandlerException` with `NotificationType` and `HandlerType` for diagnostics.
+
+### Notification exception handlers (outbox-friendly)
+
+```csharp
+public sealed class EmailFailedOutboxHandler
+    : INotificationExceptionHandler<UserCreated, Exception>
+{
+    public Task Handle(UserCreated notification, Exception exception, CancellationToken ct)
+    {
+        // log, write dead-letter / outbox row, compensate...
+        return Task.CompletedTask;
+    }
+}
+```
+
+Handlers are discovered by `AddInterlink` assembly scanning (same as notification handlers).
+
+They run **before** the chosen strategy rethrows or continues, so you can persist a failure even when using `StopOnFirst`.
+
+## 📊 Telemetry (v1.7)
+
+```bash
+dotnet add package Interlink.Extensions.Telemetry
+```
+
+```csharp
+builder.Services.AddInterlink(typeof(MyHandler).Assembly);
+builder.Services.AddInterlinkTelemetry();
+```
+
+Subscribe to activity source **`Interlink`** in OpenTelemetry:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t
+        .AddSource("Interlink")
+        .AddAspNetCoreInstrumentation()
+        .AddOtlpExporter());
+```
+
+| Operation | Activity name |
+|-----------|----------------|
+| `Send` | `Interlink.Send {Request}` |
+| `Publish` | `Interlink.Publish {Notification}` |
+| `CreateStream` | `Interlink.CreateStream {Request}` |
+
+Failed operations set activity status to **Error** and add exception tags.
+
 
 ## 📜 License
 
